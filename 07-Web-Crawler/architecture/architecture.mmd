@@ -1,0 +1,39 @@
+%% Web Crawler: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    seeds(["Seed URLs"])
+    frontier[["URL Frontier<br/>per-host queues<br/>priority + politeness"]]
+    fetcher["Fetcher workers<br/>DNS cache, timeouts"]
+    parser["Parser<br/>extract links + text"]
+    filter["URL filter<br/>normalize, scope, robots"]
+
+    web["The web"]
+    storage[("Blob storage<br/>raw pages for indexing")]
+    contentDedup[("Content hashes<br/>skip mirrors")]
+    seenUrls[("Seen URLs<br/>Bloom filter + store")]
+    robots[("robots.txt cache<br/>per host")]
+
+    seeds --> frontier
+    frontier -->|"next polite URL"| fetcher
+    fetcher -->|"HTTP GET"| web
+    fetcher -->|"store page"| storage
+    fetcher --> parser
+    parser -->|"new content?"| contentDedup
+    parser -->|"links"| filter
+    filter -->|"seen before?"| seenUrls
+    filter -->|"allowed?"| robots
+    filter -.->|"enqueue new URLs"| frontier
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class seeds client
+    class fetcher,parser,filter service
+    class storage,seenUrls,contentDedup database
+    class robots cache
+    class frontier queue
+    class web external

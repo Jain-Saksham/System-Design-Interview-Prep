@@ -1,0 +1,40 @@
+%% Distributed Message Queue (Kafka-style): production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    producers(["Producers<br/>partition = hash(key) % N"])
+
+    subgraph topic["Topic 'orders': 3 partitions, each replicated to 3 brokers"]
+        p0[["Partition 0<br/>leader: broker 1"]]
+        p1[["Partition 1<br/>leader: broker 2"]]
+        p2[["Partition 2<br/>leader: broker 3"]]
+    end
+
+    subgraph billing["Consumer group 'billing'"]
+        c1["billing-1<br/>owns P0, P1"]
+        c2["billing-2<br/>owns P2"]
+    end
+
+    analytics["Consumer group 'analytics'<br/>reads all partitions independently"]
+    controller[("Controller / coordinator<br/>leaders, membership, committed offsets")]
+
+    producers -->|"append (acks=all)"| p0
+    producers --> p1
+    producers --> p2
+    p0 -.->|"fetch from offset"| c1
+    p1 -.-> c1
+    p2 -.-> c2
+    topic -.-> analytics
+    c1 -->|"commit offsets"| controller
+    c2 --> controller
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class producers client
+    class c1,c2,analytics service
+    class controller database
+    class p0,p1,p2 queue

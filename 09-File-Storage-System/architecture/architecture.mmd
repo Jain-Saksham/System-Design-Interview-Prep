@@ -1,0 +1,41 @@
+%% File Storage System (S3-style object storage): production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    client(["Client / SDK<br/>PUT, GET, LIST"])
+    lb["Load Balancer"]
+    api["API servers<br/>auth, chunking, checksums"]
+    cluster["Cluster manager<br/>node health"]
+
+    subgraph metadataTier["Metadata tier (small, strongly consistent)"]
+        metaSvc["Metadata service"]
+        metaDb[("Metadata DB<br/>bucket + key → chunk list")]
+    end
+
+    subgraph dataTier["Data tier (huge, cheap, 3 replicas per chunk)"]
+        node1[("Data node")]
+        node2[("Data node")]
+        node3[("Data node")]
+    end
+
+    background["Background workers<br/>repair, GC, scrubbing"]
+
+    client --> lb
+    lb --> api
+    api -->|"healthy nodes?"| cluster
+    api -->|"1. write chunk"| node1
+    api -->|"1. write chunk"| node2
+    api -->|"1. write chunk"| node3
+    api -->|"2. commit metadata"| metaSvc
+    metaSvc --> metaDb
+    background -.->|"re-replicate lost copies"| dataTier
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class client client
+    class lb,api,cluster,metaSvc,background service
+    class metaDb,node1,node2,node3 database

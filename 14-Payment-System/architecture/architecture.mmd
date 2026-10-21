@@ -1,0 +1,39 @@
+%% Payment System: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    client(["Checkout / merchant<br/>Idempotency-Key header"])
+    paymentSvc["Payment service<br/>state machine"]
+
+    subgraph data["Payment data (PostgreSQL, strongly consistent)"]
+        idem[("Idempotency keys<br/>unique constraint")]
+        paymentsDb[("Payments")]
+        ledger[("Ledger<br/>double-entry, append-only")]
+    end
+
+    psp["Payment provider<br/>Stripe / Adyen"]
+    recon["Reconciliation job<br/>resolve PROCESSING,<br/>flag mismatches"]
+    events[["Kafka<br/>payment-events (outbox)"]]
+    notify["Merchant webhooks,<br/>receipts, analytics"]
+
+    client -->|"POST /payments"| paymentSvc
+    paymentSvc -->|"1. claim key"| idem
+    paymentSvc -->|"2. PROCESSING"| paymentsDb
+    paymentSvc -->|"3. charge (idempotent)"| psp
+    paymentSvc -->|"4. post entries on success"| ledger
+    psp -.->|"settlement records"| recon
+    paymentsDb -.->|"our records"| recon
+    paymentSvc -.->|"status changed"| events
+    events -.-> notify
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class client client
+    class paymentSvc,recon,notify service
+    class idem,paymentsDb,ledger database
+    class events queue
+    class psp external

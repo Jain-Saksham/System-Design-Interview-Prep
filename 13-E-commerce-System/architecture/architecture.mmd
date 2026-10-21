@@ -1,0 +1,48 @@
+%% E-commerce System: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    shopper(["Shopper<br/>web / app"])
+    gateway["API Gateway"]
+
+    subgraph browse["Browse (read-heavy, cached)"]
+        catalogSvc["Catalog + search"]
+        searchIdx[("Search index<br/>Elasticsearch")]
+    end
+
+    cartSvc["Cart service"]
+    cartStore[("Carts<br/>Redis")]
+
+    subgraph checkoutFlow["Checkout (consistency-critical)"]
+        checkout["Checkout service<br/>saga + idempotency key"]
+        inventory[("Inventory DB<br/>conditional decrement")]
+        payment["Payment service"]
+        orders[("Orders DB<br/>PostgreSQL")]
+    end
+
+    events[["Kafka<br/>order-placed"]]
+    downstream["Fulfilment, email,<br/>analytics"]
+
+    shopper --> gateway
+    gateway -->|"search, product pages"| catalogSvc
+    catalogSvc --> searchIdx
+    gateway -->|"add to cart"| cartSvc
+    cartSvc --> cartStore
+    gateway -->|"POST /orders"| checkout
+    checkout -->|"1. reserve stock"| inventory
+    checkout -->|"2. charge"| payment
+    checkout -->|"3. save order"| orders
+    checkout -.->|"publish"| events
+    events -.-> downstream
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class shopper client
+    class gateway,catalogSvc,cartSvc,checkout,payment,downstream service
+    class searchIdx,inventory,orders database
+    class cartStore cache
+    class events queue

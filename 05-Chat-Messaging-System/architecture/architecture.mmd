@@ -1,0 +1,39 @@
+%% Chat Messaging System: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    sender(["Sender's app"])
+    recipient(["Recipient's app"])
+
+    gwA["WebSocket gateway A<br/>holds sender's socket"]
+    gwB["WebSocket gateway B<br/>holds recipient's socket"]
+
+    chat["Chat service<br/>dedupe, assign sequence"]
+    messages[("Cassandra<br/>messages by conversation")]
+    presence[("Redis<br/>presence: user → gateway")]
+    bus[["Pub/Sub<br/>channel per gateway"]]
+    push["Push service"]
+    apns["APNs / FCM"]
+
+    sender -->|"WebSocket: send"| gwA
+    gwA --> chat
+    chat -->|"1. append"| messages
+    chat -->|"2. where is recipient?"| presence
+    chat -.->|"3a. online: route"| bus
+    bus -.-> gwB
+    gwB -.->|"deliver + ack"| recipient
+    chat -.->|"3b. offline"| push
+    push -.-> apns
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class sender,recipient client
+    class gwA,gwB,chat,push service
+    class messages database
+    class presence cache
+    class bus queue
+    class apns external

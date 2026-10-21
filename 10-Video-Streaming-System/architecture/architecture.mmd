@@ -1,0 +1,40 @@
+%% Video Streaming System: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    creator(["Creator app"])
+    viewer(["Viewer's player<br/>adaptive bitrate"])
+
+    subgraph upload["Upload + processing (async)"]
+        uploadSvc["Upload service<br/>presigned URL"]
+        raw[("Raw video<br/>object storage")]
+        queue[["Job queue<br/>segment × rendition"]]
+        workers["Transcoding workers<br/>240p … 1080p"]
+    end
+
+    meta[("Video metadata<br/>title, status")]
+    origin[("Segments + playlists<br/>object storage (CDN origin)")]
+    cdn["CDN edge<br/>caches segments"]
+
+    creator -->|"upload"| uploadSvc
+    uploadSvc -->|"store original"| raw
+    uploadSvc -.->|"split into jobs"| queue
+    queue -.-> workers
+    workers -->|"read"| raw
+    workers -->|"write segments"| origin
+    workers -.->|"all done: READY"| meta
+    viewer -->|"1. video page"| meta
+    viewer -->|"2. playlists, then segments"| cdn
+    cdn -->|"cache miss"| origin
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class creator,viewer client
+    class uploadSvc,workers service
+    class raw,meta,origin database
+    class cdn cache
+    class queue queue

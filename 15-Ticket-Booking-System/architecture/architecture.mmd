@@ -1,0 +1,39 @@
+%% Ticket Booking System: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    user(["Customer app"])
+    waitingRoom["Virtual waiting room<br/>for hot on-sales"]
+    bookingSvc["Booking service<br/>hold → pay → confirm"]
+
+    seatCache[("Seat map cache<br/>Redis, read-mostly")]
+    seatsDb[("Show seats<br/>PostgreSQL: status, hold_expires_at")]
+    payment["Payment service"]
+    bookings[("Bookings")]
+
+    sweeper["Hold sweeper<br/>release expired holds"]
+    events[["Kafka<br/>booking-confirmed"]]
+    tickets["E-tickets, email,<br/>analytics"]
+
+    user -->|"browse seat map"| seatCache
+    user -->|"select seats"| waitingRoom
+    waitingRoom -->|"admitted at a safe rate"| bookingSvc
+    bookingSvc -->|"1. conditional UPDATE: hold"| seatsDb
+    bookingSvc -->|"2. charge"| payment
+    bookingSvc -->|"3. confirm"| bookings
+    sweeper -.->|"every few seconds"| seatsDb
+    seatsDb -.->|"changes"| seatCache
+    bookingSvc -.->|"publish"| events
+    events -.-> tickets
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class user client
+    class waitingRoom,bookingSvc,payment,sweeper,tickets service
+    class seatsDb,bookings database
+    class seatCache cache
+    class events queue

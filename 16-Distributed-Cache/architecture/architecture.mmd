@@ -1,0 +1,32 @@
+%% Distributed Cache: production architecture (cache-aside with client-side consistent hashing)
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    users(["Users"])
+    app["App servers<br/>cache client: hash ring"]
+    config[("Cluster config<br/>etcd / ZooKeeper")]
+
+    subgraph cluster["Cache cluster (each node: in-memory LRU + TTL)"]
+        node1[("Cache node A<br/>other keys")]
+        node2[("Cache node B<br/>owner of key")]
+        node3[("Cache node C<br/>replica of key")]
+    end
+
+    db[("Database<br/>source of truth")]
+
+    users --> app
+    config -.->|"ring membership"| app
+    app -->|"1. get(key)<br/>3. put on miss"| node2
+    app -->|"put also to replica"| node3
+    app -->|"2. on miss: read"| db
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class users client
+    class app service
+    class config,db database
+    class node1,node2,node3 cache

@@ -1,0 +1,40 @@
+%% Search Autocomplete: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    user(["Search box<br/>debounced keystrokes"])
+    cdn["CDN / edge cache<br/>popular prefixes"]
+
+    subgraph serving["Read path (real time)"]
+        suggest["Suggestion servers<br/>in-memory trie<br/>top-k per node"]
+    end
+
+    subgraph pipeline["Build pipeline (offline, e.g. hourly)"]
+        kafka[["Kafka<br/>search events"]]
+        aggregate["Aggregation job<br/>counts per window, decay"]
+        builder["Trie builder<br/>filter blocked terms"]
+        snapshots[("Trie snapshots<br/>object storage")]
+    end
+
+    searchSvc["Search service"]
+
+    user -->|"GET /suggest?q=jav"| cdn
+    cdn -->|"cache miss"| suggest
+    user -->|"submit search"| searchSvc
+    searchSvc -.->|"log query"| kafka
+    kafka -.-> aggregate
+    aggregate -.-> builder
+    builder -.->|"publish"| snapshots
+    snapshots -.->|"load + atomic swap"| suggest
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class user client
+    class suggest,aggregate,builder,searchSvc service
+    class snapshots database
+    class cdn cache
+    class kafka queue

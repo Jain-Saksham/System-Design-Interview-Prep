@@ -1,0 +1,41 @@
+%% Logging and Monitoring System: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    services(["Application services<br/>on many hosts"])
+    agents["Log agents per host<br/>Fluent Bit: batch, retry"]
+    kafka[["Kafka<br/>logs topic (buffer)"]]
+    processor["Stream processors<br/>parse, enrich, aggregate"]
+
+    subgraph storage["Storage"]
+        archive[("Archive<br/>object storage")]
+        logIndex[("Log index<br/>Elasticsearch, daily partitions")]
+        tsdb[("Metrics TSDB<br/>Prometheus / M3")]
+    end
+
+    dashboards(["Engineers<br/>search + dashboards"])
+    alerting["Alert manager<br/>rules, cooldown, routing"]
+    pager["PagerDuty / Slack"]
+
+    services -->|"stdout / files"| agents
+    agents -.->|"ship batches"| kafka
+    kafka -.-> processor
+    processor -.->|"compressed raw logs"| archive
+    processor -->|"index"| logIndex
+    processor -->|"counters per minute"| tsdb
+    dashboards -->|"query"| logIndex
+    dashboards -->|"query"| tsdb
+    alerting -->|"evaluate every minute"| tsdb
+    alerting -.->|"notify"| pager
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class services,dashboards client
+    class agents,processor,alerting service
+    class logIndex,tsdb,archive database
+    class kafka queue
+    class pager external

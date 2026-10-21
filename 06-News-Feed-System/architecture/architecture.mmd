@@ -1,0 +1,47 @@
+%% News Feed System: production architecture (hybrid fan-out)
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    author(["Author's app"])
+    reader(["Reader's app"])
+
+    subgraph write["Write path"]
+        postSvc["Post service"]
+        kafka[["Kafka<br/>new-posts"]]
+        fanout["Fan-out workers<br/>skip celebrities"]
+    end
+
+    subgraph read["Read path"]
+        feedSvc["Feed service<br/>merge + rank + paginate"]
+    end
+
+    subgraph storage["Storage"]
+        postsDb[("Posts DB<br/>Cassandra")]
+        followGraph[("Follow graph")]
+        feedCache[("Redis feed cache<br/>post IDs per user")]
+        postCache[("Redis post cache<br/>content + recent posts per author")]
+    end
+
+    author -->|"POST /posts"| postSvc
+    postSvc -->|"save"| postsDb
+    postSvc -.->|"publish"| kafka
+    kafka -.-> fanout
+    fanout -->|"followers of author"| followGraph
+    fanout -->|"ZADD per follower"| feedCache
+
+    reader -->|"GET /feed?cursor="| feedSvc
+    feedSvc -->|"1. cached post IDs"| feedCache
+    feedSvc -->|"2. pull celebrity posts"| postCache
+    feedSvc -->|"3. hydrate content"| postCache
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class author,reader client
+    class postSvc,fanout,feedSvc service
+    class postsDb,followGraph database
+    class feedCache,postCache cache
+    class kafka queue

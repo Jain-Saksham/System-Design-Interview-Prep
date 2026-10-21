@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Aggregator only: lets you build and test every module with one command (`mvn test`).
+  Each module's pom.xml is standalone, so you can also build a module from its own folder.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.sdprep</groupId>
+    <artifactId>system-design-interview-prep</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>01-URL-Shortener</module>
+        <module>02-Rate-Limiter</module>
+        <module>03-API-Gateway</module>
+        <module>04-Notification-System</module>
+        <module>05-Chat-Messaging-System</module>
+        <module>06-News-Feed-System</module>
+        <module>07-Web-Crawler</module>
+        <module>08-Search-Autocomplete</module>
+        <module>09-File-Storage-System</module>
+        <module>10-Video-Streaming-System</module>
+        <module>11-Ride-Sharing-System</module>
+        <module>12-Food-Delivery-System</module>
+        <module>13-E-commerce-System</module>
+        <module>14-Payment-System</module>
+        <module>15-Ticket-Booking-System</module>
+        <module>16-Distributed-Cache</module>
+        <module>17-Logging-and-Monitoring-System</module>
+        <module>18-Job-Scheduler</module>
+        <module>19-Cloud-File-Synchronization</module>
+        <module>20-Distributed-Message-Queue</module>
+    </modules>
+</project>

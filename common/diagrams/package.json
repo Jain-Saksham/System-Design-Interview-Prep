@@ -1,0 +1,11 @@
+{
+  "name": "system-design-diagrams",
+  "private": true,
+  "description": "Renders every module's architecture/architecture.mmd to architecture.svg",
+  "scripts": {
+    "render": "./render-diagrams.sh"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "11.17.0"
+  }
+}

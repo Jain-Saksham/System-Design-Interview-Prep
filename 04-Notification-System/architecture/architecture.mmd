@@ -1,0 +1,53 @@
+%% Notification System: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    callers(["Internal services<br/>orders, auth, marketing"])
+    ingest["Notification API<br/>validate, dedupe, render"]
+
+    subgraph data["Metadata"]
+        prefs[("User preferences<br/>+ contact info")]
+        templates[("Templates")]
+        dedupe[("Redis<br/>idempotency keys")]
+    end
+
+    emailQ[["Kafka: email"]]
+    smsQ[["Kafka: sms"]]
+    pushQ[["Kafka: push"]]
+
+    emailW["Email workers<br/>retry with backoff"]
+    smsW["SMS workers<br/>retry with backoff"]
+    pushW["Push workers<br/>retry with backoff"]
+
+    ses["SES / SendGrid"]
+    twilio["Twilio"]
+    apns["APNs / FCM"]
+    dlq[["Dead-letter queue<br/>after max attempts"]]
+
+    callers -->|"POST /notifications"| ingest
+    ingest -->|"lookup"| prefs
+    ingest -->|"lookup"| templates
+    ingest -->|"SET NX key"| dedupe
+    ingest -.->|"enqueue"| emailQ
+    ingest -.->|"enqueue"| smsQ
+    ingest -.->|"enqueue"| pushQ
+    emailQ -.-> emailW
+    smsQ -.-> smsW
+    pushQ -.-> pushW
+    emailW --> ses
+    smsW --> twilio
+    pushW --> apns
+    pushW -.->|"give up (any channel)"| dlq
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class callers client
+    class ingest,emailW,smsW,pushW service
+    class prefs,templates database
+    class dedupe cache
+    class emailQ,smsQ,pushQ,dlq queue
+    class ses,twilio,apns external

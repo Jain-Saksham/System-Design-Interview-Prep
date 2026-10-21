@@ -1,0 +1,31 @@
+%% Job Scheduler: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    clients(["Services<br/>schedule / cancel jobs"])
+    api["Scheduler API"]
+    jobsDb[("Jobs table<br/>index on next_run_at<br/>status, lease_owner, lease_expires_at")]
+    workers["Worker pool × N<br/>poll every second"]
+    targets["Job handlers<br/>email, reports, cleanup"]
+    failed[["Failed jobs<br/>after max attempts"]]
+    oncall["On-call alert"]
+
+    clients -->|"POST /jobs"| api
+    api -->|"insert SCHEDULED"| jobsDb
+    workers -->|"1. lease due jobs<br/>(SKIP LOCKED)"| jobsDb
+    workers -->|"2. run"| targets
+    workers -->|"3. complete or retry"| jobsDb
+    workers -.->|"give up"| failed
+    failed -.-> oncall
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class clients client
+    class api,workers,targets service
+    class jobsDb database
+    class failed queue
+    class oncall external

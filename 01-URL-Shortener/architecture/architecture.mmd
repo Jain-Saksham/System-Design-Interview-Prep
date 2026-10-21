@@ -1,0 +1,47 @@
+%% URL Shortener: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    user(["Browser / Mobile client"])
+    lb["Load Balancer"]
+
+    subgraph app["URL Service (stateless, horizontally scaled)"]
+        shorten["Shorten API<br/>POST /api/urls"]
+        redirect["Redirect API<br/>GET /{code}"]
+        idgen["ID Range Allocator<br/>+ Base62 encoder"]
+    end
+
+    subgraph data["Storage"]
+        cache[("Redis cache<br/>code → long URL")]
+        db[("PostgreSQL<br/>short_urls")]
+    end
+
+    subgraph analytics["Click analytics (async)"]
+        kafka[["Kafka topic<br/>click-events"]]
+        aggregator["Click Aggregator"]
+        olap[("Analytics store")]
+    end
+
+    user -->|"create link / visit link"| lb
+    lb --> shorten
+    lb --> redirect
+    shorten -->|"next unique ID"| idgen
+    idgen -->|"lease ID block"| db
+    shorten -->|"INSERT mapping"| db
+    redirect -->|"1. lookup code"| cache
+    redirect -->|"2. on miss: SELECT"| db
+    redirect -.->|"publish click event"| kafka
+    kafka -.-> aggregator
+    aggregator -.->|"batched counts"| olap
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class user client
+    class lb,shorten,redirect,idgen,aggregator service
+    class db,olap database
+    class cache cache
+    class kafka queue

@@ -1,0 +1,42 @@
+%% Food Delivery System: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+%% Apps appear twice: once where they send actions (left), once where they receive updates (right).
+flowchart LR
+    customer(["Customer app"])
+    restaurantApp(["Restaurant tablet"])
+    courierActions(["Courier app<br/>status + GPS"])
+
+    orderSvc["Order service<br/>state machine"]
+    ordersDb[("Orders DB<br/>PostgreSQL")]
+    events[["Kafka<br/>order-events"]]
+    dispatch["Dispatch service<br/>nearest free courier, ETA"]
+    courierGeo[("Courier locations<br/>Redis GEO")]
+    tracking["Tracking + notifications<br/>push, WebSocket"]
+
+    courierOffer(["Courier app<br/>job offer"])
+    customerTracking(["Customer app<br/>live tracking"])
+
+    customer -->|"place order"| orderSvc
+    restaurantApp -->|"accept, ready"| orderSvc
+    courierActions -->|"picked up, delivered"| orderSvc
+    courierActions -->|"GPS pings"| courierGeo
+    orderSvc -->|"persist + history"| ordersDb
+    orderSvc -.->|"status changed"| events
+    events -.->|"ACCEPTED"| dispatch
+    dispatch -->|"couriers near restaurant"| courierGeo
+    dispatch -.->|"offer"| courierOffer
+    events -.-> tracking
+    tracking -.->|"status + ETA"| customerTracking
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class customer,restaurantApp,courierActions,courierOffer,customerTracking client
+    class orderSvc,dispatch,tracking service
+    class ordersDb database
+    class courierGeo cache
+    class events queue

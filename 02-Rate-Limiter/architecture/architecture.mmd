@@ -1,0 +1,38 @@
+%% Rate Limiter: production architecture (distributed limiter in the API gateway tier)
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    client(["API clients"])
+    rulesStore[("Rules config<br/>e.g. 100 req/min per API key")]
+
+    subgraph gateway["API Gateway tier (N stateless instances)"]
+        rulesCache["Local rules cache"]
+        middleware["Rate-limit middleware<br/>client = API key or IP"]
+    end
+
+    redis[("Redis cluster<br/>per-client counters<br/>atomic Lua script")]
+    decision{"Within<br/>limit?"}
+    services["Backend services"]
+    rejected["429 Too Many Requests<br/>+ Retry-After header"]
+    monitoring["Monitoring<br/>rejection rate, hot clients"]
+
+    client --> middleware
+    rulesStore -.->|"periodic refresh"| rulesCache
+    rulesCache -->|"rule for client"| middleware
+    middleware -->|"check + consume<br/>one round trip"| redis
+    redis -->|"tokens left"| decision
+    decision -->|"yes: forward"| services
+    decision -->|"no"| rejected
+    rejected -.->|"count rejections"| monitoring
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class client,rejected client
+    class middleware,services,decision service
+    class rulesCache,redis cache
+    class rulesStore database
+    class monitoring external

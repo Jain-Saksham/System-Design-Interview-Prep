@@ -1,0 +1,32 @@
+%% Cloud File Synchronization: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    editor(["Device that changed a file<br/>chunk + hash locally"])
+
+    blockSvc["Block service"]
+    chunks[("Object storage<br/>chunks by SHA-256")]
+    metaSvc["Metadata service<br/>optimistic version check"]
+    metaDb[("Metadata DB<br/>files, versions, change journal")]
+    notify["Notification service<br/>long poll / WebSocket"]
+
+    other(["Other devices<br/>pull changes since cursor"])
+
+    editor -->|"1. which chunks are missing?<br/>2. upload only those"| blockSvc
+    blockSvc --> chunks
+    editor -->|"3. commit(path, baseVersion, chunks)"| metaSvc
+    metaSvc -->|"new version or CONFLICT"| metaDb
+    metaSvc -.->|"journal advanced"| notify
+    notify -.->|"changes available"| other
+    other -->|"changesSince(cursor)"| metaSvc
+    other -->|"download new chunks"| chunks
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class editor,other client
+    class blockSvc,metaSvc,notify service
+    class chunks,metaDb database

@@ -1,0 +1,48 @@
+%% API Gateway: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    clients(["Web / Mobile / Partner clients"])
+    lb["Load Balancer<br/>TLS termination"]
+
+    subgraph gateway["API Gateway cluster (stateless)"]
+        auth["1. Authenticate<br/>API key / JWT"]
+        limit["2. Rate limit"]
+        router["3. Route + forward<br/>timeouts, circuit breaker"]
+    end
+
+    subgraph support["Gateway dependencies"]
+        redis[("Redis<br/>rate-limit counters")]
+        config[("Config store<br/>routes, API keys")]
+    end
+
+    subgraph services["Backend services"]
+        users["User service"]
+        orders["Order service"]
+        payments["Payment service"]
+    end
+
+    observability["Logs, metrics, traces<br/>keyed by X-Request-Id"]
+
+    clients -->|"HTTPS"| lb
+    lb --> auth
+    auth --> limit
+    limit --> router
+    limit -->|"check + consume"| redis
+    config -.->|"cached locally, refreshed"| auth
+    router -->|"/users/**"| users
+    router -->|"/orders/**"| orders
+    router -->|"/payments/**"| payments
+    router -.->|"access logs"| observability
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class clients client
+    class lb,auth,limit,router,users,orders,payments service
+    class redis cache
+    class config database
+    class observability external

@@ -1,0 +1,41 @@
+%% Ride Sharing System: production architecture
+%% Solid arrows = synchronous request path; dashed arrows = asynchronous flow.
+flowchart LR
+    driver(["Driver app<br/>GPS"])
+    rider(["Rider app"])
+    offerScreen(["Driver app<br/>offer screen"])
+
+    locationSvc["Location service<br/>GPS ping every ~4 s"]
+    geo[("Geo index<br/>Redis GEO / H3 cells")]
+    kafka[["Kafka<br/>location stream"]]
+    consumers["ETA, tracking,<br/>surge analytics"]
+
+    rideSvc["Ride service<br/>trip lifecycle, fare"]
+    matching["Matching service<br/>nearest available driver"]
+    trips[("Trips DB<br/>PostgreSQL")]
+    push["Driver gateway<br/>WebSocket: offers"]
+
+    driver -->|"location pings"| locationSvc
+    locationSvc -->|"update cell"| geo
+    locationSvc -.->|"publish"| kafka
+    kafka -.-> consumers
+
+    rider -->|"request ride"| rideSvc
+    rideSvc --> matching
+    matching -->|"drivers near pickup"| geo
+    matching -->|"offer (accept / decline)"| push
+    push -.-> offerScreen
+    rideSvc -->|"create trip"| trips
+
+    classDef client fill:#E8F1FB,stroke:#2B6CB0,stroke-width:1.5px,color:#1A365D
+    classDef service fill:#E6F4EA,stroke:#2F855A,stroke-width:1.5px,color:#1C4532
+    classDef database fill:#FEF3E2,stroke:#C05621,stroke-width:1.5px,color:#652B19
+    classDef cache fill:#FDECEC,stroke:#C53030,stroke-width:1.5px,color:#63171B
+    classDef queue fill:#F3E8FD,stroke:#6B46C1,stroke-width:1.5px,color:#322659
+    classDef external fill:#EDF2F7,stroke:#4A5568,stroke-width:1.5px,stroke-dasharray:4 3,color:#1A202C
+
+    class driver,rider,offerScreen client
+    class locationSvc,consumers,rideSvc,matching,push service
+    class trips database
+    class geo cache
+    class kafka queue
